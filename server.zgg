@@ -67,7 +67,7 @@ export class Server {
                 }
                 return rv
             }
-            rsp  := next(ctx, next, name, args)
+            rsp := next(ctx, next, name, args)
             ctx.writeJson(200, rsp)
         })
     }
