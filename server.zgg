@@ -1,0 +1,81 @@
+
+export class MapFunctionLoader {
+    __init__(m) {
+        this.m = m
+    }
+    getFunc(name) {
+        return this.m[name]
+    }
+}
+
+export class FileFunctionLoader {
+    __init__(file, autoReload) {
+        this.file = file
+        this.autoReload = autoReload
+    }
+    getFunc(name) {
+        return import(this.file, this.autoReload)[name]
+    }
+}
+
+export class ChainFunctionLoader {
+    __init__(...loaders) {
+        this.loaders = loaders
+    }
+    getFunc(name) {
+        for loader in this.loaders {
+            f := loader.getFunc(name)
+            if isCallable(f) {
+                return f
+            }
+        }
+        return undefined
+    }
+}
+
+export class Server {
+    __init__(loader, ...middlewares) {
+        this.loader = loader
+        this.before = []
+        this.after  = []
+        this.middlewares = middlewares
+    }
+    serve(addr) {
+        svr := this
+        loader := this.loader
+        @http.serve(addr, ctx => {
+            [name, args] := ['', []]
+            name = ctx.path.substr(1)
+            fn := loader.getFunc(name)
+            if !isCallable(fn) {
+                ctx.write(404, 'not found')
+                return
+            }
+            req  := @json.decode(ctx.getBody())
+            fna  := fn.__args__ ?? []
+            args = when {
+                isArray(req) -> fna.map((n, i) => req[i])
+                else         -> fna.map(name => req[name])
+            }
+            chain := svr.middlewares + [(ctx, next, name, args) => fn(...args)]
+            next :=  (ctx, next, name, args) => {
+                rv := nil
+                while len(chain) > 0 {
+                    f := chain[0]
+                    chain = chain.slice(1)
+                    rv = f(ctx, next, name, args)
+                }
+                return rv
+            }
+            rsp  := next(ctx, next, name, args)
+            ctx.writeJson(200, rsp)
+        })
+    }
+}
+
+if isMain {
+    Server(
+        FileFunctionLoader(@sys.args[0], true),
+        @middlewares.Logger('RPCGG'),
+    ).serve(@sys.args[1])
+}

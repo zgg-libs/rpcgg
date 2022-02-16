@@ -1,0 +1,49 @@
+
+export func StaticAddrResolver(addr) {
+    return () => addr
+}
+
+export func RandomAddrResolver(addrs) {
+    assert len(addrs) > 0
+    return () => @random.choice(addrs)
+}
+
+export class Client {
+    __init__(addr, ...middlewares) {
+        this.addrResolver = when {
+            isCallable(addr)    -> addr
+            isArray(addr)       -> RandomAddrResolver(addr)
+            else                -> StaticAddrResolver(addr)
+        }
+        this.middlewares = middlewares ?? []
+    }
+    __getAttr__(name) {
+        addr := this.addrResolver(name)
+        ms := this.middlewares
+        if len(ms) == 0 {
+            return (...args) => @json.decode(@http.postJson('$addr/$name', args))
+        }
+        next := (name, args, headers) => {
+            if len(ms) > 0 {
+                m := ms[0]
+                ms = ms.slice(1)
+                return m(next, name, args, headers)
+            }
+            return @json.decode(@http.postJson('$addr/$name', args, headers))
+        }
+        return (...args) => next(name, args, headers)
+    }
+}
+
+if isMain {
+    mw := (next, name, args) => {
+        println('before', name, args)
+        r := next(name, args, {'X-Time': @time.time()})
+        println('after', name, args)
+        return r
+    }
+    // cli := Client('http://127.0.0.1:7878')      // without middleware
+    cli := Client('http://127.0.0.1:7878', mw)  // with middleware
+    println(cli.div(5, 0))
+    println(cli.hello('zgg'))
+}

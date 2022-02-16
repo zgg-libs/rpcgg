@@ -1,0 +1,17 @@
+
+export func Logger(tag) {
+    tag = tag ?? 'RPCGG'
+    return (ctx, next, name, args) => {
+        beginTime := @time.now()
+        try {
+            return next(ctx, next, name, args)
+        } catch(e) {
+            stack := e.stack.map(l => '  ${l[0]}:${l[1]}').join('\n')
+            log.error('$tag|$name|error: ${e.message}\n$stack')
+            return nil
+        } finally {
+            cost := (@time.now().unixNano - beginTime.unixNano) / 1000000
+            log.info('$tag|$name|$cost ms')
+        }
+    }
+}
