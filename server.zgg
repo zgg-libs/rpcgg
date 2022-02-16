@@ -76,6 +76,6 @@ export class Server {
 if isMain {
     Server(
         FileFunctionLoader(@sys.args[0], true),
-        @middlewares.Logger('RPCGG'),
+        import('./middlewares').Logger('RPCGG'),
     ).serve(@sys.args[1])
 }
